@@ -1722,11 +1722,11 @@ create policy "Users delete own receipt photos" on storage.objects
       };
     }
 
-    /**
-     * Запрос к Google Gemini 2.5 Flash со структурированным JSON-выводом
+   /**
+     * Запрос к Google Gemini 3.8 Flash со структурированным JSON-выводом
      */
     async function callGeminiReceiptOCR(base64Image, geminiApiKey, signal) {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
       const fallbackDate = getDefaultDateForSelectedMonth();
 
       const prompt = `Проанализируй фотографию кассового чека или квитанции и верни JSON.
@@ -1734,12 +1734,12 @@ create policy "Users delete own receipt photos" on storage.objects
 1. store_name: название магазина, кафе или организации (если не видно, укажи "Магазин").
 2. receipt_date: дата покупки в формате YYYY-MM-DD (если неразборчива, укажи "${fallbackDate}").
 3. currency: символ валюты строго из списка: "сом", "₽", "₸", "$", "€" (если валюта не указана явно или указано с./KGS, используй "${userSettings.default_currency || 'сом'}").
-4. items: список купленных товаров/услуг (исключи строки "ИТОГО", "СДАЧА", "НАЛИЧНЫМИ", "НДС"):
-   - name: понятное название товара на русском языке без штрихкодов и артикулов.
-   - category: строго одна из категорий: ${CATEGORY_NAMES.map(c => `"${c}"`).join(', ')}.
-   - quantity: количество (число, по умолчанию 1).
-   - unit_price: цена за 1 единицу (число).
-   - total_price: итоговая стоимость этой позиции с учетом количества и скидки (число).`;
+4. items: извлеки ВСЕ купленные товары/услуги строго сверху вниз до самого конца чека, ничего не пропускай и не объединяй (исключи только служебные строки "ИТОГО", "ВСЕГО", "СКИДКА", "СДАЧА", "НАЛИЧНЫМИ", "КАРТОЙ", "НДС"):
+  - name: понятное название товара на русском языке без штрихкодов и артикулов.
+  - category: строго одна из категорий: ${CATEGORY_NAMES.map(c => `"${c}"`).join(', ')}.
+  - quantity: количество (число, по умолчанию 1).
+  - unit_price: цена за 1 единицу (число, чтобы quantity * unit_price равнялось total_price).
+  - total_price: итоговая стоимость этой позиции с учетом количества и скидки (число).`;
 
       const body = {
         contents: [
@@ -1757,6 +1757,8 @@ create policy "Users delete own receipt photos" on storage.objects
           }
         ],
         generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
