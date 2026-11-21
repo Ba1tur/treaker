@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ЧекТрекер Cloud — Облачный учет расходов по чекам</title>
+
+  <!-- iPhone / iOS PWA мета-теги для добавления на экран «Домой» -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ЧекТрекер" />
+  <meta name="theme-color" content="#4F46E5" />
+
+  <!-- Шрифт Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          boxShadow: {
+            'soft': '0 2px 12px -2px rgba(15, 23, 42, 0.06), 0 1px 4px -1px rgba(15, 23, 42, 0.04)',
+            'card': '0 8px 30px -6px rgba(15, 23, 42, 0.08)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Supabase JS SDK v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js для интерактивной кольцевой диаграммы -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @keyframes scanLine {
+      0% { top: 6%; opacity: 0.25; }
+      50% { top: 90%; opacity: 1; }
+      100% { top: 6%; opacity: 0.25; }
+    }
+    .animate-scan-line {
+      animation: scanLine 2.1s ease-in-out infinite;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .animate-fade-in {
+      animation: fadeInUp 0.22s ease-out forwards;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- ==================== ЭКРАН 1: МАСТЕР ПОДКЛЮЧЕНИЯ SUPABASE (SETUP WIZARD) ==================== -->
+  <div id="setupScreen" class="hidden min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100">
+    <div class="w-full max-w-2xl bg-white rounded-3xl shadow-card border border-slate-200/80 overflow-hidden animate-fade-in">
+      <!-- Шапка -->
+      <div class="p-6 sm:p-8 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center shrink-0">
+              <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">ЧекТрекер Cloud</h1>
+              <p class="text-xs sm:text-sm text-indigo-100 mt-0.5">Подключение бесплатного облака Supabase</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-white/15 text-white">Vercel + iPhone</span>
+        </div>
+      </div>
+
+      <!-- Форма подключения -->
+      <div class="p-6 sm:p-8 space-y-5">
+        <div class="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 text-xs sm:text-sm text-indigo-950 space-y-1.5">
+          <p class="font-semibold">Зачем нужно облако Supabase?</p>
+          <p class="text-indigo-800 leading-relaxed">
+            На iPhone система периодически очищает локальный кэш браузера. Подключив бесплатный проект Supabase, вы сохраняете все чеки, фото и настройки в личной базе данных с доступом с iPhone и компьютера.
+          </p>
+        </div>
+
+        <form id="supabaseSetupForm" onsubmit="handleSaveSupabaseConfig(event)" class="space-y-4">
+          <div>
+            <label for="setupSupabaseUrl" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+              Project URL (из Supabase → Settings → API)
+            </label>
+            <input type="url" id="setupSupabaseUrl" required placeholder="https://xxxxxxxxxxxx.supabase.co"
+              class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+          </div>
+
+          <div>
+            <label for="setupSupabaseAnonKey" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+              Project API Key (anon / public)
+            </label>
+            <input type="text" id="setupSupabaseAnonKey" required placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+            <button type="submit"
+              class="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition active:scale-95">
+              Подключить облако и продолжить
+            </button>
+            <button type="button" onclick="enterDemoMode()"
+              class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition active:scale-95">
+              Демо-режим (без облака)
+            </button>
+          </div>
+        </form>
+
+        <!-- Сворачиваемый блок с SQL-скриптом -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden">
+          <button type="button" onclick="toggleSetupSqlBlock()"
+            class="w-full px-4 py-3.5 bg-slate-50 hover:bg-slate-100/80 flex items-center justify-between text-left transition">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">SQL</span>
+              <span class="text-xs sm:text-sm font-bold text-slate-800">SQL-скрипт для настройки таблиц и Storage в Supabase</span>
+            </div>
+            <svg id="setupSqlChevron" class="w-4 h-4 text-slate-500 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <div id="setupSqlContent" class="hidden p-4 bg-slate-900 text-slate-100 space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-slate-300">Вставьте этот код в <b>Supabase → SQL Editor → New query</b> и нажмите <b>Run</b>:</p>
+              <button type="button" onclick="copySqlScript()"
+                class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition active:scale-95">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Скопировать SQL
+              </button>
+            </div>
+            <pre id="supabaseSqlCodeBlock" class="text-[11px] leading-relaxed font-mono bg-slate-950 p-3.5 rounded-xl overflow-x-auto max-h-60 text-emerald-300 border border-slate-800"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== ЭКРАН 2: ВХОД И РЕГИСТРАЦИЯ (SUPABASE AUTH) ==================== -->
+  <div id="authScreen" class="hidden min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-card border border-slate-200/80 p-6 sm:p-8 space-y-6 animate-fade-in">
+      <div class="text-center space-y-2">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center mx-auto shadow-md shadow-indigo-500/20">
+          <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+          </svg>
+        </div>
+        <h1 class="text-2xl font-extrabold text-slate-900">ЧекТрекер Cloud</h1>
+        <p class="text-xs sm:text-sm text-slate-500">Войдите в аккаунт, чтобы синхронизировать чеки между iPhone и компьютером</p>
+      </div>
+
+      <!-- Переключатель Вход / Регистрация -->
+      <div class="grid grid-cols-2 p-1 rounded-2xl bg-slate-100">
+        <button type="button" id="authModeLoginBtn" onclick="setAuthMode('login')"
+          class="py-2 rounded-xl text-sm font-bold bg-white text-indigo-700 shadow-2xs transition">
+          Вход
+        </button>
+        <button type="button" id="authModeRegisterBtn" onclick="setAuthMode('register')"
+          class="py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
+          Регистрация
+        </button>
+      </div>
+
+      <div id="authMessageBanner" class="hidden p-3.5 rounded-2xl text-xs leading-relaxed font-medium"></div>
+
+      <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label for="authEmail" class="block text-xs font-semibold text-slate-600 mb-1">Электронная почта (Email)</label>
+          <input type="email" id="authEmail" required autocomplete="email" placeholder="name@example.com"
+            class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+        </div>
+
+        <div>
+          <label for="authPassword" class="block text-xs font-semibold text-slate-600 mb-1">Пароль (минимум 6 символов)</label>
+          <input type="password" id="authPassword" required minlength="6" autocomplete="current-password" placeholder="••••••••"
+            class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+        </div>
+
+        <button type="submit" id="authSubmitBtn"
+          class="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition active:scale-95">
+          Войти в облако
+        </button>
+      </form>
+
+      <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+        <button type="button" onclick="showSetupScreen()" class="text-slate-500 hover:text-indigo-600 font-medium transition">
+          ← Настройки Supabase
+        </button>
+        <button type="button" onclick="enterDemoMode()" class="text-emerald-600 hover:text-emerald-700 font-semibold transition">
+          Открыть демо-режим
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== ЭКРАН 3: ОСНОВНОЕ ОБЛАЧНОЕ ПРИЛОЖЕНИЕ ==================== -->
+  <div id="appShell" class="hidden min-h-screen flex flex-col">
+
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ НАВИГАЦИИ -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
+          <!-- Логотип и статус облака -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">ЧекТрекер</h1>
+                  <span id="cloudStatusBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Supabase
+                  </span>
+                </div>
+                <p id="userEmailLabel" class="text-[11px] text-slate-500 truncate max-w-[200px] sm:max-w-xs">Синхронизировано</p>
+              </div>
+            </div>
+
+            <!-- Мобильные кнопки в шапке -->
+            <div class="flex md:hidden items-center gap-1.5">
+              <button type="button" onclick="exportMonthCSV()" title="Экспорт CSV"
+                class="p-2.5 rounded-xl text-slate-600 bg-slate-100 hover:bg-slate-200 transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
+              <button type="button" onclick="openSettingsModal()" title="Настройки"
+                class="relative p-2.5 rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span id="mobileKeyAlertDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Переключатель месяца и года -->
+          <div class="flex items-center justify-between sm:justify-center gap-1.5 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/70">
+            <button type="button" onclick="changeMonth(-1)" title="Предыдущий месяц"
+              class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <div class="relative flex items-center">
+              <select id="monthSelector" onchange="onMonthSelectChange(this.value)" aria-label="Выбор месяца и года"
+                class="appearance-none bg-white text-slate-900 font-bold text-sm pl-3.5 pr-8 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer">
+              </select>
+              <svg class="w-4 h-4 text-slate-500 pointer-events-none absolute right-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            <button type="button" onclick="changeMonth(1)" title="Следующий месяц"
+              class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-white transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            <button id="currentMonthShortcut" type="button" onclick="resetToCurrentMonth()"
+              class="hidden text-xs font-semibold text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 rounded-xl hover:bg-indigo-50 transition">
+              Текущий
+            </button>
+          </div>
+
+          <!-- Десктопные действия -->
+          <div class="hidden md:flex items-center gap-2">
+            <button type="button" onclick="exportMonthCSV()"
+              class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition active:scale-95">
+              <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Экспорт CSV
+            </button>
+
+            <button type="button" onclick="openSettingsModal()"
+              class="relative inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition active:scale-95">
+              <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Настройки
+              <span id="desktopKeyAlertDot" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
+            </button>
+
+            <button type="button" onclick="triggerFileUpload()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              Добавить чек
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+
+      <!-- Баннер подсказки, если не указан Gemini API Key -->
+      <div id="missingGeminiBanner" class="hidden rounded-2xl bg-amber-50 border border-amber-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-start sm:items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold">🔑</div>
+          <div>
+            <p class="text-xs sm:text-sm font-bold text-amber-950">Укажите ключ Gemini API для распознавания фото чеков</p>
+            <p class="text-xs text-amber-800 mt-0.5">Ключ сохранится в вашем облачном аккаунте Supabase и автоматически заработает на iPhone.</p>
+          </div>
+        </div>
+        <button type="button" onclick="openSettingsModal(true)"
+          class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition active:scale-95">
+          Ввести ключ API
+        </button>
+      </div>
+
+      <!-- 1. ЗОНА ЗАГРУЗКИ ФОТО ЧЕКА -->
+      <section class="bg-white rounded-3xl border border-slate-200/80 shadow-soft overflow-hidden">
+        <input type="file" id="receiptFileInput" accept="image/*" class="hidden" onchange="handleFileSelected(event)" />
+        <input type="file" id="receiptCameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelected(event)" />
+
+        <div id="uploadDropZone" class="p-4 sm:p-6">
+          <div id="dropTarget" onclick="triggerFileUpload()"
+            class="relative rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/70 hover:bg-indigo-50/30 transition-all p-5 sm:p-6 flex flex-col lg:flex-row items-center justify-between gap-4 cursor-pointer">
+            
+            <div class="flex flex-col sm:flex-row items-center text-center sm:text-left gap-3.5">
+              <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center shrink-0">
+                <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-base sm:text-lg font-bold text-slate-900">Добавить чек с фотографией</h2>
+                <p class="text-xs sm:text-sm text-slate-500 mt-0.5 max-w-xl">
+                  Сфотографируйте чек на iPhone или выберите из галереи — AI извлечет товары, количество и суммы, а фото и данные сохранятся в облаке.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-2 w-full lg:w-auto shrink-0" onclick="event.stopPropagation()">
+              <button type="button" onclick="triggerCameraUpload()"
+                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+                Камера / Фото
+              </button>
+
+              <button type="button" onclick="triggerFileUpload()"
+                class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 transition active:scale-95">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Галерея
+              </button>
+
+              <button type="button" onclick="openManualEntryModal()"
+                class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition active:scale-95">
+                Вручную
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Индикатор AI-сканирования -->
+        <div id="scanningState" class="hidden p-6 bg-gradient-to-r from-indigo-50/80 via-white to-violet-50/80">
+          <div class="flex flex-col sm:flex-row items-center gap-5 max-w-3xl mx-auto">
+            <div class="relative w-28 h-40 rounded-2xl overflow-hidden border-2 border-indigo-400 shadow-md bg-slate-900 shrink-0">
+              <img id="scanningPreviewImg" src="" alt="Превью чека" class="w-full h-full object-cover opacity-85" />
+              <div class="absolute inset-x-0 h-0.5 bg-indigo-400 shadow-[0_0_12px_3px_rgba(99,102,241,0.9)] animate-scan-line"></div>
+            </div>
+            <div class="flex-1 text-center sm:text-left space-y-2">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Gemini AI анализирует чек...
+              </div>
+              <h3 class="text-base sm:text-lg font-bold text-slate-900">Распознаем товары, количество, цены и категории</h3>
+              <p class="text-xs sm:text-sm text-slate-600">Это займет 3–6 секунд. После этого вы сможете проверить и отредактировать позиции.</p>
+              <button type="button" onclick="cancelScanning()" class="text-xs font-semibold text-slate-500 hover:text-rose-600 underline pt-1">
+                Отменить
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 4 КАРТОЧКИ KPI ЗА ВЫБРАННЫЙ МЕСЯЦ -->
+      <section aria-label="Сводка за месяц" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+        
+        <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-soft flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Расход за месяц</span>
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div id="kpiTotalSpend" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">0 сом</div>
+            <p id="kpiSpendSubtext" class="text-xs text-slate-500 mt-1">За выбранный месяц</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-soft flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Единиц товаров</span>
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div id="kpiTotalQty" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">0 шт.</div>
+            <p id="kpiQtySubtext" class="text-xs text-slate-500 mt-1">0 уникальных позиций</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-soft flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Чеков за месяц</span>
+            <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div id="kpiReceiptCount" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">0</div>
+            <p id="kpiAvgReceipt" class="text-xs text-slate-500 mt-1">Средний чек: 0 сом</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-soft flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Топ категория</span>
+            <div id="kpiTopCatIcon" class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-base">
+              📊
+            </div>
+          </div>
+          <div class="mt-3">
+            <div id="kpiTopCategory" class="text-xl sm:text-2xl font-extrabold text-slate-900 truncate">Нет данных</div>
+            <p id="kpiTopCatSubtext" class="text-xs text-slate-500 mt-1">Добавьте первый чек</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- 3. ГРУППИРОВКА ПО КАТЕГОРИЯМ, КОЛИЧЕСТВУ И СУММАМ -->
+      <section class="bg-white rounded-3xl border border-slate-200/80 shadow-soft overflow-hidden">
+        
+        <!-- Шапка раздела и вкладки -->
+        <div class="border-b border-slate-200/80 px-4 sm:px-6 pt-4 bg-slate-50/50">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-slate-900">Группировка расходов за месяц</h2>
+              <p id="activeMonthLabel" class="text-xs text-slate-500">Детализация за Ноябрь 2026</p>
+            </div>
+
+            <div role="tablist" class="flex p-1 rounded-2xl bg-slate-200/70 gap-1 overflow-x-auto">
+              <button role="tab" id="tab-categories" onclick="switchTab('categories')"
+                class="flex-1 sm:flex-initial whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-indigo-700 shadow-2xs">
+                По категориям <span id="badge-categories" class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-indigo-100 text-indigo-700">0</span>
+              </button>
+              <button role="tab" id="tab-items" onclick="switchTab('items')"
+                class="flex-1 sm:flex-initial whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+                Сводка товаров <span id="badge-items" class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-slate-300/70 text-slate-700">0</span>
+              </button>
+              <button role="tab" id="tab-receipts" onclick="switchTab('receipts')"
+                class="flex-1 sm:flex-initial whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+                Чеки за месяц <span id="badge-receipts" class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-slate-300/70 text-slate-700">0</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Индикатор загрузки из облака -->
+        <div id="cloudLoadingState" class="hidden py-16 text-center space-y-3">
+          <svg class="w-8 h-8 animate-spin text-indigo-600 mx-auto" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="text-sm font-medium text-slate-500">Загружаем чеки из Supabase...</p>
+        </div>
+
+        <!-- Пустое состояние -->
+        <div id="emptyMonthState" class="hidden py-14 px-6 text-center max-w-lg mx-auto space-y-4">
+          <div class="w-16 h-16 rounded-3xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">В этом месяце пока нет чеков</h3>
+            <p class="text-sm text-slate-500 mt-1">
+              Сфотографируйте кассовый чек или добавьте тестовый чек, чтобы увидеть автоматическую группировку по категориям и товарам.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <button type="button" onclick="triggerCameraUpload()"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition active:scale-95">
+              Добавить фото чека
+            </button>
+            <button type="button" onclick="openTestReceiptModal()"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition active:scale-95">
+              Добавить тестовый чек
+            </button>
+          </div>
+        </div>
+
+        <!-- ВКЛАДКА 1: ПО КАТЕГОРИЯМ (Chart.js + Аккордеоны категорий) -->
+        <div id="view-categories" class="hidden p-4 sm:p-6">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- Кольцевая диаграмма Chart.js -->
+            <div class="lg:col-span-5 bg-slate-50/80 rounded-2xl p-5 border border-slate-200/70">
+              <h3 class="text-sm font-bold text-slate-800 mb-4">Доля категорий в расходах</h3>
+              <div class="relative w-56 h-56 mx-auto my-2">
+                <canvas id="categoryDoughnutChart"></canvas>
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 text-center">
+                  <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Всего</span>
+                  <span id="chartCenterTotal" class="text-base sm:text-lg font-extrabold text-slate-900 leading-tight mt-0.5">0 сом</span>
+                </div>
+              </div>
+              <div id="chartCustomLegend" class="mt-5 space-y-1.5"></div>
+            </div>
+
+            <!-- Карточки-аккордеоны категорий -->
+            <div class="lg:col-span-7 space-y-3" id="categoryAccordionsList"></div>
+
+          </div>
+        </div>
+
+        <!-- ВКЛАДКА 2: СВОДКА ТОВАРОВ (ГРУППИРОВКА ПО НАЗВАНИЮ И КАТЕГОРИИ) -->
+        <div id="view-items" class="hidden p-4 sm:p-6 space-y-4">
+          <div class="flex flex-col md:flex-row gap-3">
+            <div class="relative flex-1">
+              <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input type="text" id="itemSearchInput" oninput="renderItemsSummaryTab()"
+                placeholder="Поиск товара (например: молоко, хлеб, такси)..."
+                class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition" />
+              <button id="clearSearchBtn" type="button" onclick="clearItemSearch()"
+                class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2.5">
+              <select id="itemCategoryFilter" onchange="renderItemsSummaryTab()" aria-label="Фильтр по категории"
+                class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+                <option value="ALL">Все категории</option>
+              </select>
+
+              <select id="itemSortSelect" onchange="renderItemsSummaryTab()" aria-label="Сортировка"
+                class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+                <option value="totalDesc">По сумме (убыв.)</option>
+                <option value="totalAsc">По сумме (возр.)</option>
+                <option value="qtyDesc">По количеству (убыв.)</option>
+                <option value="qtyAsc">По количеству (возр.)</option>
+                <option value="nameAsc">По названию (А → Я)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-2xl border border-slate-200/80">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th class="py-3.5 px-4">Товар / Услуга</th>
+                  <th class="py-3.5 px-4">Категория</th>
+                  <th class="py-3.5 px-4 text-right">Общее кол-во</th>
+                  <th class="py-3.5 px-4 text-right hidden sm:table-cell">Ср. цена за ед.</th>
+                  <th class="py-3.5 px-4 text-right">Общая сумма</th>
+                </tr>
+              </thead>
+              <tbody id="groupedItemsTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+            </table>
+          </div>
+          <div id="itemsNoFilterMatch" class="hidden py-8 text-center text-sm text-slate-500">
+            Ничего не найдено по текущему фильтру.
+          </div>
+        </div>
+
+        <!-- ВКЛАДКА 3: ЧЕКИ ЗА МЕСЯЦ -->
+        <div id="view-receipts" class="hidden p-4 sm:p-6">
+          <div id="receiptsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+      </section>
+    </main>
+
+    <footer class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 text-center text-xs text-slate-400">
+      ЧекТрекер Cloud • Хранение в Supabase PostgreSQL + Storage • Распознавание Gemini 2.5 Flash
+    </footer>
+  </div>
+
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО ПРОВЕРКИ / ДОБАВЛЕНИЯ ЧЕКА ==================== -->
+  <div id="reviewModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 flex items-center justify-center">
+    <div class="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-fade-in">
+      
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">✓</div>
+          <div>
+            <h3 id="reviewModalTitle" class="text-base sm:text-lg font-bold text-slate-900">Проверка чека перед сохранением</h3>
+            <p class="text-xs text-slate-500">Отредактируйте позиции при необходимости и сохраните в облако</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeReviewModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- Левая колонка: фото чека + кнопка тестового чека -->
+          <div class="lg:col-span-4 flex flex-col gap-3">
+            <div class="rounded-2xl border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center min-h-[190px] max-h-[360px]">
+              <img id="reviewReceiptImg" src="" alt="Фото чека" class="hidden w-full h-full object-contain max-h-[360px] cursor-zoom-in transition-transform" onclick="toggleImageZoom(this)" />
+              <div id="reviewNoImagePlaceholder" class="flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                <svg class="w-10 h-10 mb-2 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span class="text-xs font-medium">Чек без фотографии</span>
+              </div>
+            </div>
+
+            <button type="button" onclick="fillModalWithTestReceipt()"
+              class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition active:scale-95">
+              <span>🧪</span> Добавить тестовый чек
+            </button>
+          </div>
+
+          <!-- Правая колонка: реквизиты и позиции -->
+          <div class="lg:col-span-8 space-y-5">
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <div class="sm:col-span-5">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Магазин / Заведение</label>
+                <input type="text" id="reviewStoreInput" placeholder="Например: Глобус"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+              </div>
+              <div class="sm:col-span-4">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Дата чека</label>
+                <input type="date" id="reviewDateInput"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500" />
+              </div>
+              <div class="sm:col-span-3">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Валюта</label>
+                <select id="reviewCurrencyInput" onchange="updateReviewTotals()"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+                  <option value="сом">сом (KGS)</option>
+                  <option value="₽">₽ (RUB)</option>
+                  <option value="₸">₸ (KZT)</option>
+                  <option value="$">$ (USD)</option>
+                  <option value="€">€ (EUR)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-2.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Позиции (<span id="reviewItemsCountLabel">0</span>)
+                </span>
+                <button type="button" onclick="addReviewItemRow()"
+                  class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition">
+                  + Добавить позицию
+                </button>
+              </div>
+
+              <div class="hidden sm:grid sm:grid-cols-12 gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div class="col-span-4">Товар</div>
+                <div class="col-span-3">Категория</div>
+                <div class="col-span-1 text-right">Кол-во</div>
+                <div class="col-span-2 text-right">Цена ед.</div>
+                <div class="col-span-2 text-right">Сумма</div>
+              </div>
+
+              <div id="reviewItemsContainer" class="space-y-2.5"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-4">
+          <div>
+            <span class="text-xs text-slate-500 block">Единиц:</span>
+            <span id="reviewTotalQtyDisplay" class="text-sm font-bold text-slate-800">0 шт.</span>
+          </div>
+          <div class="h-8 w-px bg-slate-200"></div>
+          <div>
+            <span class="text-xs text-slate-500 block">Итого по чеку:</span>
+            <span id="reviewTotalSumDisplay" class="text-lg font-extrabold text-indigo-600">0 сом</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeReviewModal()"
+            class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition">
+            Отмена
+          </button>
+          <button type="button" id="saveReceiptSubmitBtn" onclick="saveReviewedReceipt()"
+            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition active:scale-95">
+            Сохранить в облако
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО НАСТРОЕК (GEMINI KEY, SUPABASE, IPHONE ССЫЛКА) ==================== -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 flex items-center justify-center">
+    <div class="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-fade-in">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h3 class="text-base sm:text-lg font-bold text-slate-900">Настройки облака и AI</h3>
+        <button type="button" onclick="closeSettingsModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-5 space-y-5">
+        <!-- Блок 1: Gemini API Key (синхронизируется в Supabase user_settings) -->
+        <div class="space-y-3 bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100">
+          <div class="flex items-center justify-between">
+            <label for="settingsGeminiKey" class="text-xs font-bold uppercase tracking-wider text-indigo-900">
+              Google Gemini API Key
+            </label>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
+              class="text-xs font-semibold text-indigo-600 hover:underline">
+              Получить бесплатный ключ →
+            </a>
+          </div>
+          <input type="password" id="settingsGeminiKey" placeholder="AIzaSy..."
+            class="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+          <p class="text-[11px] text-indigo-800">
+            Сохраняется в таблице <code class="font-semibold">user_settings</code> в Supabase — после сохранения на компьютере ключ автоматически появится и на вашем iPhone.
+          </p>
+        </div>
+
+        <!-- Валюта по умолчанию -->
+        <div>
+          <label for="settingsDefaultCurrency" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            Валюта по умолчанию
+          </label>
+          <select id="settingsDefaultCurrency"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+            <option value="сом">сом (KGS)</option>
+            <option value="₽">₽ (RUB)</option>
+            <option value="₸">₸ (KZT)</option>
+            <option value="$">$ (USD)</option>
+            <option value="€">€ (EUR)</option>
+          </select>
+        </div>
+
+        <button type="button" id="saveCloudSettingsBtn" onclick="saveUserCloudSettings()"
+          class="w-full py-3 rounded-2xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition active:scale-95">
+          Сохранить настройки в облаке
+        </button>
+
+        <!-- Блок 2: Быстрый перенос подключения на iPhone -->
+        <div id="iphoneSyncSection" class="pt-4 border-t border-slate-200 space-y-2.5">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Быстрое подключение iPhone</h4>
+          <p class="text-xs text-slate-600">
+            Чтобы не вводить длинный ключ Supabase на телефоне вручную, скопируйте специальную ссылку и откройте её в Safari на iPhone (затем нажмите «Поделиться» → «На экран „Домой“»):
+          </p>
+          <button type="button" onclick="copyIphoneQuickLink()"
+            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 transition active:scale-95">
+            <span>📲</span> Скопировать ссылку настройки для iPhone
+          </button>
+        </div>
+
+        <!-- Блок 3: SQL-скрипт и выход из аккаунта -->
+        <div class="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onclick="copySqlScript()"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition">
+            Скопировать SQL для Supabase
+          </button>
+
+          <button type="button" onclick="changeSupabaseConnection()"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+            Сменить проект Supabase
+          </button>
+
+          <button type="button" onclick="handleSignOut()"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition">
+            Выйти из аккаунта
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО ПРОСМОТРА ЧЕКА И ФОТО ИЗ STORAGE ==================== -->
+  <div id="detailModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 flex items-center justify-center">
+    <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <h3 id="detailModalStore" class="text-lg font-bold text-slate-900">Магазин</h3>
+          <p id="detailModalMeta" class="text-xs text-slate-500">Дата</p>
+        </div>
+        <button type="button" onclick="closeDetailModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-5 space-y-5">
+        <div id="detailModalPhotoLoading" class="hidden py-6 text-center text-xs text-slate-500">
+          Загружаем фото чека из защищенного облака Supabase Storage...
+        </div>
+        <div id="detailModalImgWrapper" class="hidden rounded-2xl border border-slate-200 bg-slate-100 p-2 flex justify-center">
+          <img id="detailModalImg" src="" alt="Фото чека" class="max-h-80 object-contain rounded-xl" />
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 overflow-hidden">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
+                <th class="py-2.5 px-3.5">Товар</th>
+                <th class="py-2.5 px-3.5">Категория</th>
+                <th class="py-2.5 px-3.5 text-right">Кол-во</th>
+                <th class="py-2.5 px-3.5 text-right">Сумма</th>
+              </tr>
+            </thead>
+            <tbody id="detailModalItemsBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-slate-500">Итого:</span>
+          <span id="detailModalTotal" class="ml-1.5 text-lg font-extrabold text-slate-900">0 сом</span>
+        </div>
+        <button type="button" onclick="closeDetailModal()"
+          class="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-slate-800 hover:bg-slate-900 transition">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== КАСТОМНОЕ МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ==================== -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs p-4 flex items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-fade-in">
+      <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </div>
+      <div>
+        <h3 id="confirmModalTitle" class="text-lg font-bold text-slate-900">Удалить чек?</h3>
+        <p id="confirmModalMessage" class="text-sm text-slate-500 mt-1">Чек и его фотография будут удалены из облака Supabase.</p>
+      </div>
+      <div class="flex items-center justify-end gap-2.5 pt-2">
+        <button type="button" onclick="closeConfirmModal()"
+          class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+          Отмена
+        </button>
+        <button id="confirmModalActionBtn" type="button"
+          class="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 transition">
+          Удалить
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== TOAST УВЕДОМЛЕНИЯ ==================== -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+
+  <!-- ==================== JAVASCRIPT ЛОГИКА ==================== -->
+  <script>
+    /**
+     * Справочник категорий расходов
+     */
+    const CATEGORIES = {
+      'Продукты': { color: '#10B981', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: '🛒' },
+      'Кафе и рестораны': { color: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: '☕' },
+      'Транспорт': { color: '#0EA5E9', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', icon: '🚕' },
+      'Аптека и здоровье': { color: '#F43F5E', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', icon: '💊' },
+      'Одежда и обувь': { color: '#A855F7', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', icon: '👕' },
+      'Дом и быт': { color: '#6366F1', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', icon: '🏠' },
+      'Техника и связь': { color: '#14B8A6', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', icon: '📱' },
+      'Развлечения': { color: '#EC4899', bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', icon: '🎬' },
+      'Другое': { color: '#64748B', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', icon: '📦' }
+    };
+
+    const CATEGORY_NAMES = Object.keys(CATEGORIES);
+    const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    const MONTH_NAMES_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    const LS_SB_URL = 'chektraker_supabase_url';
+    const LS_SB_KEY = 'chektraker_supabase_anon_key';
+    const LS_DEMO_GEMINI_KEY = 'chektraker_demo_gemini_key';
+
+    // SQL-скрипт для быстрой инициализации Supabase
+    const SUPABASE_SETUP_SQL = `-- 1. Таблица чеков
+create table if not exists public.receipts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  store_name text not null,
+  receipt_date date not null,
+  currency text not null default 'сом',
+  total_amount numeric(12,2) not null default 0,
+  image_path text,
+  created_at timestamptz default now()
+);
+
+-- 2. Таблица позиций в чеке
+create table if not exists public.receipt_items (
+  id uuid primary key default gen_random_uuid(),
+  receipt_id uuid references public.receipts(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  category text not null,
+  quantity numeric(10,3) not null default 1,
+  unit_price numeric(12,2) not null default 0,
+  total_price numeric(12,2) not null default 0,
+  created_at timestamptz default now()
+);
+
+-- 3. Таблица настроек пользователя (синхронизация Gemini API ключа между устройствами)
+create table if not exists public.user_settings (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  gemini_api_key text,
+  default_currency text not null default 'сом',
+  updated_at timestamptz default now()
+);
+
+-- 4. Включаем Row Level Security (RLS)
+alter table public.receipts enable row level security;
+alter table public.receipt_items enable row level security;
+alter table public.user_settings enable row level security;
+
+-- 5. Политики безопасности (каждый видит только свои чеки)
+drop policy if exists "Users manage own receipts" on public.receipts;
+create policy "Users manage own receipts" on public.receipts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "Users manage own receipt_items" on public.receipt_items;
+create policy "Users manage own receipt_items" on public.receipt_items
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "Users manage own settings" on public.user_settings;
+create policy "Users manage own settings" on public.user_settings
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 6. Индексы для быстрых отчетов за месяц
+create index if not exists idx_receipts_user_date on public.receipts(user_id, receipt_date);
+create index if not exists idx_receipt_items_receipt on public.receipt_items(receipt_id);
+
+-- 7. Приватный Storage-бакет для фотографий чеков
+insert into storage.buckets (id, name, public)
+values ('receipts', 'receipts', false)
+on conflict (id) do nothing;
+
+-- 8. Политики Storage (доступ только к папке своего user_id)
+drop policy if exists "Users upload own receipt photos" on storage.objects;
+create policy "Users upload own receipt photos" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'receipts' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users view own receipt photos" on storage.objects;
+create policy "Users view own receipt photos" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'receipts' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users delete own receipt photos" on storage.objects;
+create policy "Users delete own receipt photos" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'receipts' and (storage.foldername(name))[1] = auth.uid()::text);`;
+
+    // Глобальное состояние приложения
+    let supabaseClient = null;
+    let currentUser = null;
+    let isDemoMode = false;
+    let authMode = 'login'; // 'login' | 'register'
+
+    let userSettings = {
+      gemini_api_key: '',
+      default_currency: 'сом'
+    };
+
+    let selectedMonth = getCurrentMonthString(); // YYYY-MM
+    let activeTab = 'categories';
+    let monthReceipts = [];
+    let prevMonthReceipts = [];
+
+    let expandedCategories = new Set();
+    let expandedProducts = new Set();
+    let categoryChartInstance = null;
+    let activeScanAbortController = null;
+    let demoTestCycle = 0;
+
+    // Черновик чека в модальном окне проверки
+    let draftReceipt = {
+      store_name: '',
+      receipt_date: '',
+      currency: 'сом',
+      imageBlob: null,
+      imagePreviewUrl: null,
+      items: []
+    };
+
+    /**
+     * ==================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ====================
+     */
+    window.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('supabaseSqlCodeBlock').textContent = SUPABASE_SETUP_SQL;
+      populateCategoryFilter();
+      setupDragAndDrop();
+
+      // Проверяем, не переданы ли параметры подключения в URL-хэше (быстрый вход с iPhone)
+      applyConfigFromUrlHash();
+
+      const savedUrl = localStorage.getItem(LS_SB_URL);
+      const savedKey = localStorage.getItem(LS_SB_KEY);
+
+      if (savedUrl && savedKey) {
+        document.getElementById('setupSupabaseUrl').value = savedUrl;
+        document.getElementById('setupSupabaseAnonKey').value = savedKey;
+        await initSupabaseAndCheckSession(savedUrl, savedKey);
+      } else {
+        showSetupScreen();
+      }
+    });
+
+    /**
+     * Поддержка ссылки быстрого переноса Supabase URL + Key на iPhone
+     */
+    function applyConfigFromUrlHash() {
+      try {
+        const hash = window.location.hash;
+        if (hash && hash.includes('sb_url=') && hash.includes('sb_key=')) {
+          const params = new URLSearchParams(hash.slice(1));
+          const url = params.get('sb_url');
+          const key = params.get('sb_key');
+          if (url && key) {
+            localStorage.setItem(LS_SB_URL, url.trim());
+            localStorage.setItem(LS_SB_KEY, key.trim());
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+        }
+      } catch (e) {}
+    }
+
+    /**
+     * ==================== ЭКРАН SETUP WIZARD И AUTH ====================
+     */
+    function showSetupScreen() {
+      document.getElementById('setupScreen').classList.remove('hidden');
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+    }
+
+    function showAuthScreen() {
+      document.getElementById('setupScreen').classList.add('hidden');
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+    }
+
+    function showAppShell() {
+      document.getElementById('setupScreen').classList.add('hidden');
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.remove('hidden');
+    }
+
+    function toggleSetupSqlBlock() {
+      const content = document.getElementById('setupSqlContent');
+      const chevron = document.getElementById('setupSqlChevron');
+      content.classList.toggle('hidden');
+      chevron.classList.toggle('rotate-180');
+    }
+
+    function copySqlScript() {
+      copyTextToClipboard(SUPABASE_SETUP_SQL, 'SQL-скрипт скопирован! Вставьте его в Supabase SQL Editor.');
+    }
+
+    async function handleSaveSupabaseConfig(event) {
+      event.preventDefault();
+      const url = document.getElementById('setupSupabaseUrl').value.trim().replace(/\/$/, '');
+      const key = document.getElementById('setupSupabaseAnonKey').value.trim();
+
+      if (!url.startsWith('https://') || !key) {
+        showToast('Проверьте корректность Project URL (начинается с https://) и Anon Key.', 'error');
+        return;
+      }
+
+      localStorage.setItem(LS_SB_URL, url);
+      localStorage.setItem(LS_SB_KEY, key);
+      await initSupabaseAndCheckSession(url, key);
+    }
+
+    async function initSupabaseAndCheckSession(url, key) {
+      try {
+        supabaseClient = window.supabase.createClient(url, key);
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (error) {
+          showToast('Ошибка подключения к Supabase: ' + error.message, 'error');
+          showSetupScreen();
+          return;
+        }
+
+        isDemoMode = false;
+        if (session?.user) {
+          currentUser = session.user;
+          await onUserAuthenticated();
+        } else {
+          showAuthScreen();
+        }
+      } catch (err) {
+        showToast('Не удалось инициализировать Supabase. Проверьте URL и ключ.', 'error');
+        showSetupScreen();
+      }
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const loginBtn = document.getElementById('authModeLoginBtn');
+      const regBtn = document.getElementById('authModeRegisterBtn');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const banner = document.getElementById('authMessageBanner');
+      banner.classList.add('hidden');
+
+      if (mode === 'login') {
+        loginBtn.className = 'py-2 rounded-xl text-sm font-bold bg-white text-indigo-700 shadow-2xs transition';
+        regBtn.className = 'py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition';
+        submitBtn.textContent = 'Войти в облако';
+      } else {
+        regBtn.className = 'py-2 rounded-xl text-sm font-bold bg-white text-indigo-700 shadow-2xs transition';
+        loginBtn.className = 'py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition';
+        submitBtn.textContent = 'Создать аккаунт';
+      }
+    }
+
+    async function handleAuthSubmit(event) {
+      event.preventDefault();
+      if (!supabaseClient) return;
+
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const banner = document.getElementById('authMessageBanner');
+
+      banner.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Подождите...';
+
+      try {
+        if (authMode === 'login') {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          currentUser = data.user;
+          await onUserAuthenticated();
+        } else {
+          const { data, error } = await supabaseClient.auth.signUp({ email, password });
+          if (error) throw error;
+
+          if (data.session && data.user) {
+            currentUser = data.user;
+            await onUserAuthenticated();
+          } else {
+            banner.className = 'p-3.5 rounded-2xl text-xs leading-relaxed font-medium bg-emerald-50 text-emerald-900 border border-emerald-200';
+            banner.textContent = 'Аккаунт создан! Проверьте почту и перейдите по ссылке подтверждения (либо отключите «Confirm email» в Supabase → Authentication → Providers → Email для мгновенного входа).';
+            banner.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        let msg = err.message || 'Ошибка авторизации';
+        if (msg.includes('Invalid login credentials')) {
+          msg = 'Неверный email или пароль.';
+        } else if (msg.includes('Email not confirmed')) {
+          msg = 'Email не подтвержден. Подтвердите письмо на почте или отключите «Confirm email» в настройках Supabase Auth.';
+        } else if (msg.includes('User already registered')) {
+          msg = 'Этот email уже зарегистрирован. Переключитесь на вкладку «Вход».';
+        }
+        banner.className = 'p-3.5 rounded-2xl text-xs leading-relaxed font-medium bg-rose-50 text-rose-800 border border-rose-200';
+        banner.textContent = msg;
+        banner.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = authMode === 'login' ? 'Войти в облако' : 'Создать аккаунт';
+      }
+    }
+
+    async function onUserAuthenticated() {
+      showAppShell();
+      document.getElementById('cloudStatusBadge').innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Supabase Cloud`;
+      document.getElementById('cloudStatusBadge').className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+      document.getElementById('userEmailLabel').textContent = currentUser.email || 'Облако подключено';
+      document.getElementById('iphoneSyncSection').classList.remove('hidden');
+
+      await loadUserCloudSettings();
+      renderMonthSelector();
+      await fetchAndRenderMonthData();
+    }
+
+    /**
+     * Демо-режим в оперативной памяти (без облака)
+     */
+    function enterDemoMode() {
+      isDemoMode = true;
+      currentUser = { id: 'demo-user', email: 'Демо-режим (в памяти)' };
+      userSettings = {
+        gemini_api_key: localStorage.getItem(LS_DEMO_GEMINI_KEY) || '',
+        default_currency: 'сом'
+      };
+
+      showAppShell();
+      document.getElementById('cloudStatusBadge').innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Демо-режим`;
+      document.getElementById('cloudStatusBadge').className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200';
+      document.getElementById('userEmailLabel').textContent = 'Данные в памяти браузера (без Supabase)';
+      document.getElementById('iphoneSyncSection').classList.add('hidden');
+
+      updateGeminiKeyAlertState();
+
+      // Предзаполняем 2 демо-чека для наглядности
+      const ym = getCurrentMonthString();
+      selectedMonth = ym;
+      monthReceipts = [
+        {
+          id: 'demo-1',
+          store_name: 'Гипермаркет Глобус',
+          receipt_date: `${ym}-10`,
+          currency: 'сом',
+          total_amount: 1625,
+          image_path: null,
+          demoBlobUrl: null,
+          items: [
+            { name: 'Молоко Домашнее 3.2%', category: 'Продукты', quantity: 2, unit_price: 95, total_price: 190 },
+            { name: 'Филе куриное охлажденное', category: 'Продукты', quantity: 1.2, unit_price: 400, total_price: 480 },
+            { name: 'Бананы Эквадор', category: 'Продукты', quantity: 1.5, unit_price: 140, total_price: 210 },
+            { name: 'Гель для стирки Persil', category: 'Дом и быт', quantity: 1, unit_price: 690, total_price: 690 },
+            { name: 'Хлеб Бородинский', category: 'Продукты', quantity: 1, unit_price: 55, total_price: 55 }
+          ]
+        },
+        {
+          id: 'demo-2',
+          store_name: 'Кофейня Sierra Coffee',
+          receipt_date: `${ym}-15`,
+          currency: 'сом',
+          total_amount: 955,
+          image_path: null,
+          demoBlobUrl: null,
+          items: [
+            { name: 'Капучино большой', category: 'Кафе и рестораны', quantity: 2, unit_price: 220, total_price: 440 },
+            { name: 'Сэндвич с курицей', category: 'Кафе и рестораны', quantity: 1, unit_price: 320, total_price: 320 },
+            { name: 'Круассан миндальный', category: 'Кафе и рестораны', quantity: 1, unit_price: 195, total_price: 195 }
+          ]
+        }
+      ];
+      prevMonthReceipts = [];
+
+      renderMonthSelector();
+      renderDashboardFromState();
+      showToast('Вы в демо-режиме. Подключите Supabase в настройках для облачного хранения.', 'info');
+    }
+
+    async function handleSignOut() {
+      closeSettingsModal();
+      if (isDemoMode) {
+        isDemoMode = false;
+        showSetupScreen();
+        return;
+      }
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
+      currentUser = null;
+      monthReceipts = [];
+      showAuthScreen();
+      showToast('Вы вышли из аккаунта.', 'info');
+    }
+
+    function changeSupabaseConnection() {
+      closeSettingsModal();
+      showSetupScreen();
+    }
+
+    /**
+     * ==================== НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ В SUPABASE (USER_SETTINGS) ====================
+     */
+    async function loadUserCloudSettings() {
+      if (isDemoMode || !supabaseClient || !currentUser) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('user_settings')
+          .select('gemini_api_key, default_currency')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+
+        if (error) {
+          if (error.message?.includes('does not exist')) {
+            showToast('Таблицы не найдены. Выполните SQL-скрипт в Supabase SQL Editor!', 'error');
+          }
+          return;
+        }
+
+        if (data) {
+          userSettings.gemini_api_key = data.gemini_api_key || '';
+          userSettings.default_currency = data.default_currency || 'сом';
+        }
+      } catch (e) {}
+      updateGeminiKeyAlertState();
+    }
+
+    function updateGeminiKeyAlertState() {
+      const hasKey = Boolean(userSettings.gemini_api_key && userSettings.gemini_api_key.trim().length > 10);
+      const banner = document.getElementById('missingGeminiBanner');
+      const mobileDot = document.getElementById('mobileKeyAlertDot');
+      const desktopDot = document.getElementById('desktopKeyAlertDot');
+
+      if (!hasKey) {
+        banner.classList.remove('hidden');
+        mobileDot.classList.remove('hidden');
+        desktopDot.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+        mobileDot.classList.add('hidden');
+        desktopDot.classList.add('hidden');
+      }
+    }
+
+    function openSettingsModal(focusGeminiInput = false) {
+      document.getElementById('settingsGeminiKey').value = userSettings.gemini_api_key || '';
+      document.getElementById('settingsDefaultCurrency').value = userSettings.default_currency || 'сом';
+      document.getElementById('settingsModal').classList.remove('hidden');
+      if (focusGeminiInput) {
+        setTimeout(() => document.getElementById('settingsGeminiKey').focus(), 100);
+      }
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+    }
+
+    async function saveUserCloudSettings() {
+      const geminiKey = document.getElementById('settingsGeminiKey').value.trim();
+      const defCurrency = document.getElementById('settingsDefaultCurrency').value || 'сом';
+
+      userSettings.gemini_api_key = geminiKey;
+      userSettings.default_currency = defCurrency;
+      updateGeminiKeyAlertState();
+
+      if (isDemoMode) {
+        localStorage.setItem(LS_DEMO_GEMINI_KEY, geminiKey);
+        closeSettingsModal();
+        showToast('Настройки сохранены для демо-сессии!', 'success');
+        return;
+      }
+
+      const btn = document.getElementById('saveCloudSettingsBtn');
+      btn.disabled = true;
+      btn.textContent = 'Сохранение...';
+
+      try {
+        const { error } = await supabaseClient
+          .from('user_settings')
+          .upsert({
+            user_id: currentUser.id,
+            gemini_api_key: geminiKey,
+            default_currency: defCurrency,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' });
+
+        if (error) throw error;
+
+        closeSettingsModal();
+        showToast('Настройки сохранены в Supabase и синхронизированы!', 'success');
+      } catch (err) {
+        showToast('Ошибка сохранения настроек: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Сохранить настройки в облаке';
+      }
+    }
+
+    function copyIphoneQuickLink() {
+      const url = localStorage.getItem(LS_SB_URL);
+      const key = localStorage.getItem(LS_SB_KEY);
+      if (!url || !key) {
+        showToast('Сначала подключите Supabase.', 'error');
+        return;
+      }
+      const baseUrl = window.location.origin + window.location.pathname;
+      const quickLink = `${baseUrl}#sb_url=${encodeURIComponent(url)}&sb_key=${encodeURIComponent(key)}`;
+      copyTextToClipboard(quickLink, 'Ссылка скопирована! Отправьте её себе в Telegram/Заметки и откройте в Safari на iPhone.');
+    }
+
+    /**
+     * ==================== ЗАПРОС ДАННЫХ ЗА МЕСЯЦ ИЗ SUPABASE ====================
+     */
+    async function fetchAndRenderMonthData() {
+      if (isDemoMode) {
+        renderDashboardFromState();
+        return;
+      }
+
+      if (!supabaseClient || !currentUser) return;
+
+      document.getElementById('cloudLoadingState').classList.remove('hidden');
+      document.getElementById('emptyMonthState').classList.add('hidden');
+      ['categories', 'items', 'receipts'].forEach(v => document.getElementById(`view-${v}`).classList.add('hidden'));
+
+      try {
+        const { start: curStart, end: curEnd } = getMonthDateRange(selectedMonth);
+        const prevYM = getAdjacentMonthString(selectedMonth, -1);
+        const { start: prevStart, end: prevEnd } = getMonthDateRange(prevYM);
+
+        // Загружаем чеки текущего месяца вместе с вложенными позициями (receipt_items)
+        const [curRes, prevRes] = await Promise.all([
+          supabaseClient
+            .from('receipts')
+            .select('id, store_name, receipt_date, currency, total_amount, image_path, created_at, receipt_items(*)')
+            .eq('user_id', currentUser.id)
+            .gte('receipt_date', curStart)
+            .lte('receipt_date', curEnd)
+            .order('receipt_date', { ascending: false })
+            .order('created_at', { ascending: false }),
+          supabaseClient
+            .from('receipts')
+            .select('id, total_amount, currency')
+            .eq('user_id', currentUser.id)
+            .gte('receipt_date', prevStart)
+            .lte('receipt_date', prevEnd)
+        ]);
+
+        if (curRes.error) throw curRes.error;
+
+        monthReceipts = (curRes.data || []).map(r => ({
+          ...r,
+          items: Array.isArray(r.receipt_items) ? r.receipt_items : []
+        }));
+
+        prevMonthReceipts = prevRes.data || [];
+
+      } catch (err) {
+        showToast('Ошибка загрузки чеков: ' + err.message, 'error');
+        monthReceipts = [];
+        prevMonthReceipts = [];
+      } finally {
+        document.getElementById('cloudLoadingState').classList.add('hidden');
+        renderDashboardFromState();
+      }
+    }
+
+    function getMonthDateRange(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      return {
+        start: `${ym}-01`,
+        end: `${ym}-${String(lastDay).padStart(2, '0')}`
+      };
+    }
+
+    function getAdjacentMonthString(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    /**
+     * ==================== СКАНИРОВАНИЕ ФОТО ЧЕКА ЧЕРЕЗ GEMINI 2.5 FLASH ====================
+     */
+    function triggerFileUpload() {
+      const input = document.getElementById('receiptFileInput');
+      input.value = '';
+      input.click();
+    }
+
+    function triggerCameraUpload() {
+      const input = document.getElementById('receiptCameraInput');
+      input.value = '';
+      input.click();
+    }
+
+    function setupDragAndDrop() {
+      const dropTarget = document.getElementById('dropTarget');
+      if (!dropTarget) return;
+
+      ['dragenter', 'dragover'].forEach(evt => {
+        dropTarget.addEventListener(evt, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropTarget.classList.add('border-indigo-500', 'bg-indigo-50/70');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evt => {
+        dropTarget.addEventListener(evt, e => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropTarget.classList.remove('border-indigo-500', 'bg-indigo-50/70');
+        });
+      });
+
+      dropTarget.addEventListener('drop', e => {
+        const file = e.dataTransfer?.files?.[0];
+        if (file) processReceiptPhoto(file);
+      });
+    }
+
+    function handleFileSelected(event) {
+      const file = event.target?.files?.[0];
+      if (file) processReceiptPhoto(file);
+    }
+
+    /**
+     * Сжатие изображения на Canvas (макс 1280px, JPEG 0.82) -> base64 для Gemini + Blob для Storage
+     */
+    function compressImageOnCanvas(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 1280;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            const base64 = dataUrl.split(',')[1];
+
+            canvas.toBlob(blob => {
+              if (!blob) {
+                reject(new Error('Не удалось сформировать JPEG файл'));
+                return;
+              }
+              const previewUrl = URL.createObjectURL(blob);
+              resolve({ base64, blob, previewUrl });
+            }, 'image/jpeg', 0.82);
+          };
+          img.onerror = () => reject(new Error('Ошибка загрузки изображения'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function processReceiptPhoto(file) {
+      if (!file.type.startsWith('image/')) {
+        showToast('Пожалуйста, выберите фотографию чека.', 'error');
+        return;
+      }
+
+      let compressed;
+      try {
+        compressed = await compressImageOnCanvas(file);
+      } catch (err) {
+        showToast(err.message, 'error');
+        return;
+      }
+
+      const geminiKey = (userSettings.gemini_api_key || '').trim();
+      if (!geminiKey) {
+        showToast('Сначала укажите ключ Gemini API в настройках, чтобы AI мог распознать фото.', 'error');
+        openSettingsModal(true);
+        return;
+      }
+
+      // Показываем индикатор сканирования
+      document.getElementById('uploadDropZone').classList.add('hidden');
+      document.getElementById('scanningState').classList.remove('hidden');
+      document.getElementById('scanningPreviewImg').src = compressed.previewUrl;
+
+      activeScanAbortController = new AbortController();
+
+      try {
+        const parsed = await callGeminiReceiptOCR(compressed.base64, geminiKey, activeScanAbortController.signal);
+
+        document.getElementById('scanningState').classList.add('hidden');
+        document.getElementById('uploadDropZone').classList.remove('hidden');
+
+        openReviewModal({
+          store_name: parsed.store_name || 'Магазин',
+          receipt_date: isValidDateStr(parsed.receipt_date) ? parsed.receipt_date : getDefaultDateForSelectedMonth(),
+          currency: ['сом', '₽', '₸', '$', '€'].includes(parsed.currency) ? parsed.currency : (userSettings.default_currency || 'сом'),
+          imageBlob: compressed.blob,
+          imagePreviewUrl: compressed.previewUrl,
+          items: Array.isArray(parsed.items) && parsed.items.length > 0
+            ? parsed.items.map(normalizeParsedItem)
+            : [createEmptyItem()]
+        }, 'Чек распознан — проверьте позиции');
+
+        showToast('Чек успешно распознан!', 'success');
+      } catch (err) {
+        document.getElementById('scanningState').classList.add('hidden');
+        document.getElementById('uploadDropZone').classList.remove('hidden');
+
+        if (err.name === 'AbortError') {
+          showToast('Распознавание отменено.', 'info');
+          return;
+        }
+
+        showToast('Не удалось распознать чек автоматически (' + err.message + '). Заполните позиции по фото.', 'error');
+        openReviewModal({
+          store_name: '',
+          receipt_date: getDefaultDateForSelectedMonth(),
+          currency: userSettings.default_currency || 'сом',
+          imageBlob: compressed.blob,
+          imagePreviewUrl: compressed.previewUrl,
+          items: [createEmptyItem()]
+        }, 'Ручной ввод по фото чека');
+      }
+    }
+
+    function cancelScanning() {
+      if (activeScanAbortController) {
+        activeScanAbortController.abort();
+        activeScanAbortController = null;
+      }
+    }
+
+    function normalizeParsedItem(raw) {
+      const cat = CATEGORY_NAMES.includes(raw.category) ? raw.category : 'Другое';
+      const qty = Number(raw.quantity) > 0 ? Number(raw.quantity) : 1;
+      let totalPrice = Number(raw.total_price) >= 0 ? Number(raw.total_price) : 0;
+      let unitPrice = Number(raw.unit_price) >= 0 ? Number(raw.unit_price) : 0;
+
+      if (totalPrice === 0 && unitPrice > 0) {
+        totalPrice = Number((unitPrice * qty).toFixed(2));
+      } else if (unitPrice === 0 && totalPrice > 0 && qty > 0) {
+        unitPrice = Number((totalPrice / qty).toFixed(2));
+      }
+
+      const cleanName = String(raw.name || 'Товар').replace(/\s+/g, ' ').trim();
+      return {
+        name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+        category: cat,
+        quantity: qty,
+        unit_price: unitPrice,
+        total_price: totalPrice
+      };
+    }
+
+    /**
+     * Запрос к Google Gemini 2.5 Flash со структурированным JSON-выводом
+     */
+    async function callGeminiReceiptOCR(base64Image, geminiApiKey, signal) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+      const fallbackDate = getDefaultDateForSelectedMonth();
+
+      const prompt = `Проанализируй фотографию кассового чека или квитанции и верни JSON.
+Правила:
+1. store_name: название магазина, кафе или организации (если не видно, укажи "Магазин").
+2. receipt_date: дата покупки в формате YYYY-MM-DD (если неразборчива, укажи "${fallbackDate}").
+3. currency: символ валюты строго из списка: "сом", "₽", "₸", "$", "€" (если валюта не указана явно или указано с./KGS, используй "${userSettings.default_currency || 'сом'}").
+4. items: список купленных товаров/услуг (исключи строки "ИТОГО", "СДАЧА", "НАЛИЧНЫМИ", "НДС"):
+   - name: понятное название товара на русском языке без штрихкодов и артикулов.
+   - category: строго одна из категорий: ${CATEGORY_NAMES.map(c => `"${c}"`).join(', ')}.
+   - quantity: количество (число, по умолчанию 1).
+   - unit_price: цена за 1 единицу (число).
+   - total_price: итоговая стоимость этой позиции с учетом количества и скидки (число).`;
+
+      const body = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              store_name: { type: 'STRING' },
+              receipt_date: { type: 'STRING' },
+              currency: { type: 'STRING', enum: ['сом', '₽', '₸', '$', '€'] },
+              items: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    name: { type: 'STRING' },
+                    category: { type: 'STRING', enum: CATEGORY_NAMES },
+                    quantity: { type: 'NUMBER' },
+                    unit_price: { type: 'NUMBER' },
+                    total_price: { type: 'NUMBER' }
+                  },
+                  required: ['name', 'category', 'quantity', 'unit_price', 'total_price']
+                }
+              }
+            },
+            required: ['store_name', 'receipt_date', 'currency', 'items']
+          }
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const apiMsg = errData?.error?.message || `HTTP ${response.status}`;
+        if (response.status === 400 || response.status === 403) {
+          throw new Error('Неверный ключ Gemini API. Проверьте его в настройках.');
+        }
+        throw new Error(apiMsg);
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Пустой ответ от Gemini');
+      return JSON.parse(text);
+    }
+
+    /**
+     * ==================== МОДАЛЬНОЕ ОКНО ПРОВЕРКИ И СОХРАНЕНИЯ В SUPABASE ====================
+     */
+    function createEmptyItem() {
+      return {
+        name: '',
+        category: 'Продукты',
+        quantity: 1,
+        unit_price: 0,
+        total_price: 0
+      };
+    }
+
+    function openManualEntryModal() {
+      openReviewModal({
+        store_name: '',
+        receipt_date: getDefaultDateForSelectedMonth(),
+        currency: userSettings.default_currency || 'сом',
+        imageBlob: null,
+        imagePreviewUrl: null,
+        items: [createEmptyItem()]
+      }, 'Добавить чек вручную');
+    }
+
+    function openTestReceiptModal() {
+      openReviewModal({
+        store_name: '',
+        receipt_date: getDefaultDateForSelectedMonth(),
+        currency: userSettings.default_currency || 'сом',
+        imageBlob: null,
+        imagePreviewUrl: null,
+        items: []
+      }, 'Добавить тестовый чек');
+      fillModalWithTestReceipt();
+    }
+
+    function fillModalWithTestReceipt() {
+      const ym = selectedMonth;
+      const templates = [
+        {
+          store_name: 'Супермаркет Народный',
+          receipt_date: getDefaultDateForSelectedMonth(),
+          currency: userSettings.default_currency || 'сом',
+          items: [
+            { name: 'Молоко Домашнее 3.2%', category: 'Продукты', quantity: 3, unit_price: 95, total_price: 285 },
+            { name: 'Сыр Голландский', category: 'Продукты', quantity: 1, unit_price: 340, total_price: 340 },
+            { name: 'Бананы Эквадор', category: 'Продукты', quantity: 1, unit_price: 140, total_price: 140 },
+            { name: 'Витамин D3 2000 МЕ', category: 'Аптека и здоровье', quantity: 1, unit_price: 520, total_price: 520 },
+            { name: 'Зубная паста Splat', category: 'Аптека и здоровье', quantity: 2, unit_price: 180, total_price: 360 }
+          ]
+        },
+        {
+          store_name: 'Яндекс Go / Такси',
+          receipt_date: `${ym}-18`,
+          currency: userSettings.default_currency || 'сом',
+          items: [
+            { name: 'Поездка по городу (Комфорт)', category: 'Транспорт', quantity: 2, unit_price: 240, total_price: 480 },
+            { name: 'Баланс мобильной связи', category: 'Техника и связь', quantity: 1, unit_price: 350, total_price: 350 }
+          ]
+        }
+      ];
+
+      const chosen = templates[demoTestCycle % templates.length];
+      demoTestCycle++;
+
+      draftReceipt.store_name = chosen.store_name;
+      draftReceipt.receipt_date = chosen.receipt_date;
+      draftReceipt.currency = chosen.currency;
+      draftReceipt.items = chosen.items.map(i => ({ ...i }));
+
+      document.getElementById('reviewStoreInput').value = draftReceipt.store_name;
+      document.getElementById('reviewDateInput').value = draftReceipt.receipt_date;
+      document.getElementById('reviewCurrencyInput').value = draftReceipt.currency;
+      renderReviewItems();
+      showToast('Тестовые позиции заполнены!', 'info');
+    }
+
+    function openReviewModal(data, title = 'Проверка чека перед сохранением') {
+      draftReceipt = {
+        store_name: data.store_name || '',
+        receipt_date: data.receipt_date || getDefaultDateForSelectedMonth(),
+        currency: data.currency || userSettings.default_currency || 'сом',
+        imageBlob: data.imageBlob || null,
+        imagePreviewUrl: data.imagePreviewUrl || null,
+        items: data.items && data.items.length > 0 ? data.items.map(i => ({ ...i })) : [createEmptyItem()]
+      };
+
+      document.getElementById('reviewModalTitle').textContent = title;
+      document.getElementById('reviewStoreInput').value = draftReceipt.store_name;
+      document.getElementById('reviewDateInput').value = draftReceipt.receipt_date;
+      document.getElementById('reviewCurrencyInput').value = draftReceipt.currency;
+
+      const imgEl = document.getElementById('reviewReceiptImg');
+      const placeholder = document.getElementById('reviewNoImagePlaceholder');
+      if (draftReceipt.imagePreviewUrl) {
+        imgEl.src = draftReceipt.imagePreviewUrl;
+        imgEl.classList.remove('hidden', 'scale-150');
+        placeholder.classList.add('hidden');
+      } else {
+        imgEl.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+      }
+
+      renderReviewItems();
+      document.getElementById('reviewModal').classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeReviewModal() {
+      document.getElementById('reviewModal').classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    function toggleImageZoom(imgEl) {
+      imgEl.classList.toggle('scale-150');
+    }
+
+    function renderReviewItems() {
+      const container = document.getElementById('reviewItemsContainer');
+      document.getElementById('reviewItemsCountLabel').textContent = draftReceipt.items.length;
+
+      container.innerHTML = draftReceipt.items.map((item, idx) => {
+        const catOptions = CATEGORY_NAMES.map(cat =>
+          `<option value="${cat}" ${item.category === cat ? 'selected' : ''}>${CATEGORIES[cat].icon} ${cat}</option>`
+        ).join('');
+
+        return `
+          <div class="p-3 sm:p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center">
+            <div class="sm:col-span-4">
+              <input type="text" value="${escapeHtml(item.name)}" placeholder="Название товара"
+                oninput="updateDraftItem(${idx}, 'name', this.value)"
+                class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+            </div>
+
+            <div class="sm:col-span-3">
+              <select onchange="updateDraftItem(${idx}, 'category', this.value)"
+                class="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+                ${catOptions}
+              </select>
+            </div>
+
+            <div class="grid grid-cols-3 sm:contents gap-2">
+              <div class="sm:col-span-1">
+                <label class="sm:hidden block text-[10px] font-semibold text-slate-400">Кол-во</label>
+                <input type="number" step="any" min="0.001" value="${item.quantity}"
+                  oninput="updateDraftItem(${idx}, 'quantity', this.value)"
+                  class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="sm:hidden block text-[10px] font-semibold text-slate-400">Цена ед.</label>
+                <input type="number" step="any" min="0" value="${item.unit_price}"
+                  oninput="updateDraftItem(${idx}, 'unit_price', this.value)"
+                  class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              </div>
+
+              <div class="sm:col-span-2 flex items-center gap-1">
+                <div class="flex-1">
+                  <label class="sm:hidden block text-[10px] font-semibold text-slate-400">Сумма</label>
+                  <input type="number" step="any" min="0" id="draftTotalInput_${idx}" value="${item.total_price}"
+                    oninput="updateDraftItem(${idx}, 'total_price', this.value)"
+                    class="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                </div>
+                <button type="button" onclick="removeReviewItemRow(${idx})" title="Удалить строку"
+                  class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition shrink-0">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateReviewTotals();
+    }
+
+    function updateDraftItem(index, field, value) {
+      const item = draftReceipt.items[index];
+      if (!item) return;
+
+      if (field === 'quantity') {
+        item.quantity = parseFloat(value) || 0;
+        if (item.unit_price > 0) {
+          item.total_price = Number((item.quantity * item.unit_price).toFixed(2));
+          const totalEl = document.getElementById(`draftTotalInput_${index}`);
+          if (totalEl) totalEl.value = item.total_price;
+        }
+        updateReviewTotals();
+      } else if (field === 'unit_price') {
+        item.unit_price = parseFloat(value) || 0;
+        item.total_price = Number((item.quantity * item.unit_price).toFixed(2));
+        const totalEl = document.getElementById(`draftTotalInput_${index}`);
+        if (totalEl) totalEl.value = item.total_price;
+        updateReviewTotals();
+      } else if (field === 'total_price') {
+        item.total_price = parseFloat(value) || 0;
+        updateReviewTotals();
+      } else {
+        item[field] = value;
+      }
+    }
+
+    function addReviewItemRow() {
+      draftReceipt.items.push(createEmptyItem());
+      renderReviewItems();
+    }
+
+    function removeReviewItemRow(index) {
+      if (draftReceipt.items.length <= 1) {
+        showToast('В чеке должна оставаться минимум одна позиция.', 'info');
+        return;
+      }
+      draftReceipt.items.splice(index, 1);
+      renderReviewItems();
+    }
+
+    function updateReviewTotals() {
+      const currency = document.getElementById('reviewCurrencyInput').value || 'сом';
+      const totalQty = draftReceipt.items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+      const totalSum = draftReceipt.items.reduce((s, i) => s + (Number(i.total_price) || 0), 0);
+
+      document.getElementById('reviewTotalQtyDisplay').textContent = `${formatQty(totalQty)} шт.`;
+      document.getElementById('reviewTotalSumDisplay').textContent = formatMoney(totalSum, currency);
+    }
+
+    /**
+     * Сохранение чека: загрузка фото в Storage -> вставка в receipts -> вставка в receipt_items
+     */
+    async function saveReviewedReceipt() {
+      const storeName = document.getElementById('reviewStoreInput').value.trim() || 'Магазин';
+      const receiptDate = document.getElementById('reviewDateInput').value || getDefaultDateForSelectedMonth();
+      const currency = document.getElementById('reviewCurrencyInput').value || 'сом';
+
+      const validItems = draftReceipt.items
+        .map(item => {
+          const qty = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+          const total = Number(item.total_price) >= 0 ? Number(item.total_price) : 0;
+          const unit = Number(item.unit_price) > 0 ? Number(item.unit_price) : Number((total / qty).toFixed(2));
+          return {
+            name: (item.name || '').trim(),
+            category: CATEGORY_NAMES.includes(item.category) ? item.category : 'Другое',
+            quantity: qty,
+            unit_price: unit,
+            total_price: total
+          };
+        })
+        .filter(i => i.name.length > 0);
+
+      if (validItems.length === 0) {
+        showToast('Добавьте хотя бы одну позицию с названием товара.', 'error');
+        return;
+      }
+
+      const totalAmount = Number(validItems.reduce((s, i) => s + i.total_price, 0).toFixed(2));
+      const targetMonth = receiptDate.slice(0, 7);
+
+      // Если активен Демо-режим
+      if (isDemoMode) {
+        const newReceipt = {
+          id: `demo_${Date.now()}`,
+          store_name: storeName,
+          receipt_date: receiptDate,
+          currency,
+          total_amount: totalAmount,
+          image_path: null,
+          demoBlobUrl: draftReceipt.imagePreviewUrl,
+          items: validItems
+        };
+        if (targetMonth === selectedMonth) {
+          monthReceipts.unshift(newReceipt);
+        } else {
+          selectedMonth = targetMonth;
+          monthReceipts = [newReceipt];
+        }
+        closeReviewModal();
+        renderMonthSelector();
+        renderDashboardFromState();
+        showToast('Чек сохранен в демо-режиме!', 'success');
+        return;
+      }
+
+      // Облачное сохранение в Supabase
+      const saveBtn = document.getElementById('saveReceiptSubmitBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Сохранение в облако...';
+
+      try {
+        let uploadedImagePath = null;
+
+        // 1. Загружаем фото чека в приватный бакет Storage `receipts`
+        if (draftReceipt.imageBlob) {
+          const filePath = `${currentUser.id}/${Date.now()}.jpg`;
+          const { error: uploadError } = await supabaseClient.storage
+            .from('receipts')
+            .upload(filePath, draftReceipt.imageBlob, {
+              contentType: 'image/jpeg',
+              upsert: false
+            });
+
+          if (uploadError) {
+            showToast('Чек сохранится без фото (ошибка Storage: ' + uploadError.message + ')', 'info');
+          } else {
+            uploadedImagePath = filePath;
+          }
+        }
+
+        // 2. Вставляем запись в таблицу `receipts`
+        const { data: insertedReceipt, error: receiptError } = await supabaseClient
+          .from('receipts')
+          .insert({
+            user_id: currentUser.id,
+            store_name: storeName,
+            receipt_date: receiptDate,
+            currency,
+            total_amount: totalAmount,
+            image_path: uploadedImagePath
+          })
+          .select('id')
+          .single();
+
+        if (receiptError) throw receiptError;
+
+        // 3. Вставляем все позиции в таблицу `receipt_items`
+        const rowsToInsert = validItems.map(item => ({
+          receipt_id: insertedReceipt.id,
+          user_id: currentUser.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price
+        }));
+
+        const { error: itemsError } = await supabaseClient
+          .from('receipt_items')
+          .insert(rowsToInsert);
+
+        if (itemsError) throw itemsError;
+
+        closeReviewModal();
+        selectedMonth = targetMonth;
+        renderMonthSelector();
+        await fetchAndRenderMonthData();
+        showToast(`Чек «${storeName}» сохранен в облако!`, 'success');
+
+      } catch (err) {
+        showToast('Ошибка сохранения в Supabase: ' + err.message, 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Сохранить в облако';
+      }
+    }
+
+    /**
+     * ==================== АНАЛИТИКА И ГРУППИРОВКА ДАННЫХ ====================
+     */
+    function getPrimaryCurrency(receiptsList) {
+      if (!receiptsList || receiptsList.length === 0) return userSettings.default_currency || 'сом';
+      const counts = {};
+      receiptsList.forEach(r => {
+        const c = r.currency || 'сом';
+        counts[c] = (counts[c] || 0) + 1;
+      });
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    function computeMonthAnalytics(receiptsList) {
+      let totalSpend = 0;
+      let totalQty = 0;
+      const categoryMap = {};
+      const globalProductMap = {};
+
+      receiptsList.forEach(receipt => {
+        const currency = receipt.currency || 'сом';
+        (receipt.items || []).forEach(item => {
+          const qty = Number(item.quantity) || 0;
+          const totalPrice = Number(item.total_price) || 0;
+          const cat = CATEGORY_NAMES.includes(item.category) ? item.category : 'Другое';
+          const rawName = (item.name || 'Товар').trim();
+          const normName = rawName.toLowerCase().replace(/\s+/g, ' ');
+
+          totalSpend += totalPrice;
+          totalQty += qty;
+
+          // 1. Группировка по категории
+          if (!categoryMap[cat]) {
+            categoryMap[cat] = {
+              category: cat,
+              totalSpend: 0,
+              totalQty: 0,
+              productsMap: {}
+            };
+          }
+          categoryMap[cat].totalSpend += totalPrice;
+          categoryMap[cat].totalQty += qty;
+
+          // Группировка одинаковых товаров внутри категории
+          if (!categoryMap[cat].productsMap[normName]) {
+            categoryMap[cat].productsMap[normName] = {
+              key: `${cat}::${normName}`,
+              name: rawName,
+              totalQty: 0,
+              totalSpend: 0,
+              occurrences: []
+            };
+          }
+          const catProd = categoryMap[cat].productsMap[normName];
+          catProd.totalQty += qty;
+          catProd.totalSpend += totalPrice;
+          catProd.occurrences.push({
+            receiptId: receipt.id,
+            store_name: receipt.store_name,
+            receipt_date: receipt.receipt_date,
+            quantity: qty,
+            total_price: totalPrice,
+            currency
+          });
+
+          // 2. Глобальная группировка товаров (нормализованное название + категория)
+          const globalKey = `${normName}__${cat}`;
+          if (!globalProductMap[globalKey]) {
+            globalProductMap[globalKey] = {
+              key: globalKey,
+              name: rawName,
+              category: cat,
+              totalQty: 0,
+              totalSpend: 0,
+              receiptIds: new Set()
+            };
+          }
+          globalProductMap[globalKey].totalQty += qty;
+          globalProductMap[globalKey].totalSpend += totalPrice;
+          globalProductMap[globalKey].receiptIds.add(receipt.id);
+        });
+      });
+
+      const categoriesList = Object.values(categoryMap)
+        .map(c => ({
+          category: c.category,
+          totalSpend: c.totalSpend,
+          totalQty: c.totalQty,
+          sharePercent: totalSpend > 0 ? (c.totalSpend / totalSpend) * 100 : 0,
+          products: Object.values(c.productsMap).sort((a, b) => b.totalSpend - a.totalSpend)
+        }))
+        .sort((a, b) => b.totalSpend - a.totalSpend);
+
+      const groupedProductsList = Object.values(globalProductMap).map(p => ({
+        ...p,
+        avgUnitPrice: p.totalQty > 0 ? p.totalSpend / p.totalQty : 0,
+        receiptCount: p.receiptIds.size
+      }));
+
+      return {
+        totalSpend,
+        totalQty,
+        receiptCount: receiptsList.length,
+        categoriesList,
+        groupedProductsList
+      };
+    }
+
+    function renderDashboardFromState() {
+      const currency = getPrimaryCurrency(monthReceipts);
+      const analytics = computeMonthAnalytics(monthReceipts);
+
+      document.getElementById('activeMonthLabel').textContent = `Детализация за ${formatMonthTitle(selectedMonth)}`;
+
+      // 4 карточки KPI
+      document.getElementById('kpiTotalSpend').textContent = formatMoney(analytics.totalSpend, currency);
+
+      const prevTotal = prevMonthReceipts.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
+      const spendSub = document.getElementById('kpiSpendSubtext');
+      if (prevTotal > 0 && analytics.totalSpend > 0) {
+        const diffPct = ((analytics.totalSpend - prevTotal) / prevTotal) * 100;
+        const sign = diffPct >= 0 ? '+' : '';
+        const cls = diffPct > 0 ? 'text-rose-600' : 'text-emerald-600';
+        spendSub.innerHTML = `<span class="font-bold ${cls}">${sign}${diffPct.toFixed(1)}%</span> к прошлому месяцу (${formatMoney(prevTotal, currency)})`;
+      } else {
+        spendSub.textContent = `За ${formatMonthTitle(selectedMonth).toLowerCase()}`;
+      }
+
+      document.getElementById('kpiTotalQty').textContent = `${formatQty(analytics.totalQty)} шт.`;
+      document.getElementById('kpiQtySubtext').textContent = `${analytics.groupedProductsList.length} уникальных позиций`;
+
+      document.getElementById('kpiReceiptCount').textContent = analytics.receiptCount;
+      const avgReceipt = analytics.receiptCount > 0 ? analytics.totalSpend / analytics.receiptCount : 0;
+      document.getElementById('kpiAvgReceipt').textContent = `Средний чек: ${formatMoney(avgReceipt, currency)}`;
+
+      if (analytics.categoriesList.length > 0) {
+        const top = analytics.categoriesList[0];
+        const meta = CATEGORIES[top.category] || CATEGORIES['Другое'];
+        document.getElementById('kpiTopCatIcon').textContent = meta.icon;
+        document.getElementById('kpiTopCategory').textContent = top.category;
+        document.getElementById('kpiTopCatSubtext').textContent =
+          `${formatMoney(top.totalSpend, currency)} (${top.sharePercent.toFixed(1)}%)`;
+      } else {
+        document.getElementById('kpiTopCatIcon').textContent = '📊';
+        document.getElementById('kpiTopCategory').textContent = 'Нет данных';
+        document.getElementById('kpiTopCatSubtext').textContent = 'Добавьте первый чек';
+      }
+
+      // Счетчики вкладок
+      document.getElementById('badge-categories').textContent = analytics.categoriesList.length;
+      document.getElementById('badge-items').textContent = analytics.groupedProductsList.length;
+      document.getElementById('badge-receipts').textContent = analytics.receiptCount;
+
+      const emptyState = document.getElementById('emptyMonthState');
+      const views = ['categories', 'items', 'receipts'];
+
+      if (monthReceipts.length === 0) {
+        emptyState.classList.remove('hidden');
+        views.forEach(v => document.getElementById(`view-${v}`).classList.add('hidden'));
+      } else {
+        emptyState.classList.add('hidden');
+        views.forEach(v => {
+          const el = document.getElementById(`view-${v}`);
+          if (v === activeTab) el.classList.remove('hidden');
+          else el.classList.add('hidden');
+        });
+
+        renderCategoriesTab(analytics, currency);
+        renderItemsSummaryTab(analytics, currency);
+        renderReceiptsTab();
+      }
+    }
+
+    function switchTab(tabName) {
+      activeTab = tabName;
+      ['categories', 'items', 'receipts'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const badge = document.getElementById(`badge-${t}`);
+        if (t === tabName) {
+          btn.className = 'flex-1 sm:flex-initial whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-indigo-700 shadow-2xs';
+          badge.className = 'ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-indigo-100 text-indigo-700';
+        } else {
+          btn.className = 'flex-1 sm:flex-initial whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900';
+          badge.className = 'ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-slate-300/70 text-slate-700';
+        }
+      });
+      renderDashboardFromState();
+    }
+
+    /**
+     * ==================== ВКЛАДКА 1: ПО КАТЕГОРИЯМ (Chart.js + Аккордеоны) ====================
+     */
+    function renderCategoriesTab(analytics, currency) {
+      renderChartJsDoughnut(analytics, currency);
+
+      const listEl = document.getElementById('categoryAccordionsList');
+      listEl.innerHTML = analytics.categoriesList.map(catItem => {
+        const meta = CATEGORIES[catItem.category] || CATEGORIES['Другое'];
+        const isExpanded = expandedCategories.has(catItem.category);
+        const safeCat = encodeURIComponent(catItem.category);
+
+        const productsHtml = catItem.products.map(prod => {
+          const isProdOpen = expandedProducts.has(prod.key);
+          const safeKey = encodeURIComponent(prod.key);
+
+          const occHtml = prod.occurrences.map(occ => `
+            <button type="button" onclick="openDetailModal('${occ.receiptId}')"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 text-slate-700 transition">
+              <span class="font-semibold text-slate-900">${escapeHtml(occ.store_name)}</span>
+              <span class="text-slate-400">•</span>
+              <span class="text-slate-500">${formatShortDate(occ.receipt_date)}</span>
+              <span class="text-slate-400">•</span>
+              <span class="font-bold text-indigo-600">${formatQty(occ.quantity)} шт. (${formatMoney(occ.total_price, occ.currency)})</span>
+            </button>
+          `).join('');
+
+          return `
+            <div class="rounded-xl bg-white border border-slate-200/80 p-3 transition hover:border-slate-300">
+              <div class="flex items-center justify-between gap-2 cursor-pointer" onclick="toggleProductOccurrences('${safeKey}')">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-semibold text-sm text-slate-900 truncate">${escapeHtml(prod.name)}</span>
+                    <span class="shrink-0 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600">
+                      ${prod.occurrences.length} ${pluralizeReceipts(prod.occurrences.length)}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2.5 shrink-0">
+                  <span class="px-2 py-0.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700">
+                    ${formatQty(prod.totalQty)} шт.
+                  </span>
+                  <span class="text-sm font-extrabold text-slate-900 min-w-[78px] text-right">
+                    ${formatMoney(prod.totalSpend, currency)}
+                  </span>
+                  <svg class="w-4 h-4 text-slate-400 transition-transform ${isProdOpen ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="${isProdOpen ? 'mt-2.5 pt-2.5 border-t border-slate-100 flex flex-wrap gap-1.5' : 'hidden'}">
+                <span class="text-[11px] text-slate-400 w-full">Покупки по чекам:</span>
+                ${occHtml}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="rounded-2xl border ${isExpanded ? 'border-indigo-300 shadow-sm' : 'border-slate-200/90'} bg-white overflow-hidden transition-all">
+            <button type="button" onclick="toggleCategoryAccordion('${safeCat}')"
+              class="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50/80 transition">
+              <div class="flex items-center gap-3 min-w-0 flex-1">
+                <div class="w-11 h-11 rounded-2xl ${meta.bg} flex items-center justify-center text-xl shrink-0 border ${meta.border}">
+                  ${meta.icon}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-slate-900 text-sm sm:text-base">${catItem.category}</span>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-bold ${meta.bg} ${meta.text}">
+                      ${formatQty(catItem.totalQty)} шт.
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden max-w-[150px]">
+                      <div class="h-full rounded-full" style="width: ${Math.max(catItem.sharePercent, 3)}%; background-color: ${meta.color};"></div>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-500">${catItem.sharePercent.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-right">
+                  <div class="text-sm sm:text-base font-extrabold text-slate-900">${formatMoney(catItem.totalSpend, currency)}</div>
+                  <div class="text-[11px] text-slate-400">${catItem.products.length} поз.</div>
+                </div>
+                <div class="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">
+                  <svg class="w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+
+            <div class="${isExpanded ? 'block' : 'hidden'} bg-slate-50/80 border-t border-slate-200/70 p-3.5 space-y-2">
+              ${productsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderChartJsDoughnut(analytics, currency) {
+      document.getElementById('chartCenterTotal').textContent = formatMoney(analytics.totalSpend, currency);
+
+      const labels = analytics.categoriesList.map(c => c.category);
+      const dataValues = analytics.categoriesList.map(c => Number(c.totalSpend.toFixed(2)));
+      const colors = analytics.categoriesList.map(c => (CATEGORIES[c.category] || CATEGORIES['Другое']).color);
+
+      const canvas = document.getElementById('categoryDoughnutChart');
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+      }
+
+      if (typeof Chart !== 'undefined') {
+        categoryChartInstance = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels,
+            datasets: [{
+              data: dataValues,
+              backgroundColor: colors,
+              borderWidth: 2,
+              borderColor: '#F8FAFC',
+              hoverOffset: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ` ${ctx.label}: ${formatMoney(ctx.parsed, currency)}`
+                }
+              }
+            },
+            onClick: (_, elements) => {
+              if (elements.length > 0) {
+                const idx = elements[0].index;
+                const clickedCat = labels[idx];
+                if (clickedCat) toggleCategoryAccordion(encodeURIComponent(clickedCat));
+              }
+            }
+          }
+        });
+      }
+
+      document.getElementById('chartCustomLegend').innerHTML = analytics.categoriesList.map(catItem => {
+        const meta = CATEGORIES[catItem.category] || CATEGORIES['Другое'];
+        const safeCat = encodeURIComponent(catItem.category);
+        return `
+          <button type="button" onclick="toggleCategoryAccordion('${safeCat}')"
+            class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white transition text-left text-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${meta.color};"></span>
+              <span class="font-medium text-slate-700 truncate">${catItem.category}</span>
+              <span class="text-slate-400 shrink-0">(${formatQty(catItem.totalQty)} шт.)</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="font-bold text-slate-900">${formatMoney(catItem.totalSpend, currency)}</span>
+              <span class="text-slate-400 w-9 text-right">${catItem.sharePercent.toFixed(0)}%</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function toggleCategoryAccordion(encodedCat) {
+      const cat = decodeURIComponent(encodedCat);
+      if (expandedCategories.has(cat)) expandedCategories.delete(cat);
+      else expandedCategories.add(cat);
+      renderDashboardFromState();
+    }
+
+    function toggleProductOccurrences(encodedKey) {
+      const key = decodeURIComponent(encodedKey);
+      if (expandedProducts.has(key)) expandedProducts.delete(key);
+      else expandedProducts.add(key);
+      renderDashboardFromState();
+    }
+
+    /**
+     * ==================== ВКЛАДКА 2: СВОДКА ТОВАРОВ ====================
+     */
+    function clearItemSearch() {
+      document.getElementById('itemSearchInput').value = '';
+      renderItemsSummaryTab();
+    }
+
+    function renderItemsSummaryTab(preAnalytics = null, preCurrency = null) {
+      const currency = preCurrency || getPrimaryCurrency(monthReceipts);
+      const analytics = preAnalytics || computeMonthAnalytics(monthReceipts);
+
+      const query = (document.getElementById('itemSearchInput').value || '').trim().toLowerCase();
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (query) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+
+      const catFilter = document.getElementById('itemCategoryFilter').value;
+      const sortBy = document.getElementById('itemSortSelect').value;
+
+      const filtered = analytics.groupedProductsList
+        .filter(item => (!query || item.name.toLowerCase().includes(query)) && (catFilter === 'ALL' || item.category === catFilter))
+        .sort((a, b) => {
+          switch (sortBy) {
+            case 'totalAsc': return a.totalSpend - b.totalSpend;
+            case 'qtyDesc': return b.totalQty - a.totalQty;
+            case 'qtyAsc': return a.totalQty - b.totalQty;
+            case 'nameAsc': return a.name.localeCompare(b.name, 'ru');
+            default: return b.totalSpend - a.totalSpend;
+          }
+        });
+
+      const tbody = document.getElementById('groupedItemsTableBody');
+      const noMatch = document.getElementById('itemsNoFilterMatch');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        noMatch.classList.remove('hidden');
+        return;
+      }
+
+      noMatch.classList.add('hidden');
+      tbody.innerHTML = filtered.map(item => {
+        const meta = CATEGORIES[item.category] || CATEGORIES['Другое'];
+        return `
+          <tr class="hover:bg-slate-50/90 transition">
+            <td class="py-3.5 px-4">
+              <div class="font-semibold text-slate-900">${escapeHtml(item.name)}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">
+                В ${item.receiptCount} ${pluralizeReceipts(item.receiptCount)}
+                <span class="sm:hidden"> • Ср. цена: ${formatMoney(item.avgUnitPrice, currency)}</span>
+              </div>
+            </td>
+            <td class="py-3.5 px-4">
+              <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.bg} ${meta.text}">
+                ${meta.icon} ${item.category}
+              </span>
+            </td>
+            <td class="py-3.5 px-4 text-right">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-800">
+                ${formatQty(item.totalQty)} шт.
+              </span>
+            </td>
+            <td class="py-3.5 px-4 text-right text-slate-600 font-medium hidden sm:table-cell">
+              ${formatMoney(item.avgUnitPrice, currency)}
+            </td>
+            <td class="py-3.5 px-4 text-right font-extrabold text-slate-900">
+              ${formatMoney(item.totalSpend, currency)}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    /**
+     * ==================== ВКЛАДКА 3: ЧЕКИ ЗА МЕСЯЦ ====================
+     */
+    function renderReceiptsTab() {
+      const grid = document.getElementById('receiptsGrid');
+      grid.innerHTML = monthReceipts.map(receipt => {
+        const currency = receipt.currency || 'сом';
+        const items = receipt.items || [];
+        const totalSum = Number(receipt.total_amount) || items.reduce((s, i) => s + (Number(i.total_price) || 0), 0);
+        const totalQty = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+        const hasPhoto = Boolean(receipt.image_path || receipt.demoBlobUrl);
+
+        const uniqueCats = Array.from(new Set(items.map(i => i.category)));
+        const catBadges = uniqueCats.slice(0, 3).map(cat => {
+          const meta = CATEGORIES[cat] || CATEGORIES['Другое'];
+          return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${meta.bg} ${meta.text}">${meta.icon} ${cat}</span>`;
+        }).join('');
+
+        return `
+          <div class="rounded-2xl border border-slate-200/90 bg-white p-4 flex flex-col justify-between gap-4 hover:shadow-md transition">
+            <div class="space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <h4 class="font-bold text-slate-900 text-base truncate">${escapeHtml(receipt.store_name)}</h4>
+                  <p class="text-xs text-slate-500 mt-0.5">${formatFullDate(receipt.receipt_date)}</p>
+                </div>
+                ${hasPhoto ? `<span class="shrink-0 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700">📷 Фото</span>` : ''}
+              </div>
+
+              <div class="pt-1 flex items-baseline gap-2">
+                <span class="text-xl font-extrabold text-indigo-600">${formatMoney(totalSum, currency)}</span>
+                <span class="text-xs text-slate-400">• ${items.length} поз. (${formatQty(totalQty)} шт.)</span>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">${catBadges}</div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button type="button" onclick="openDetailModal('${receipt.id}')"
+                class="flex-1 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                ${hasPhoto ? 'Позиции и фото чека' : 'Открыть позиции'}
+              </button>
+              <button type="button" onclick="confirmDeleteReceipt('${receipt.id}')" title="Удалить чек"
+                class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * ==================== ПРОСМОТР ФОТО ИЗ SUPABASE STORAGE И УДАЛЕНИЕ ЧЕКА ====================
+     */
+    async function openDetailModal(receiptId) {
+      const receipt = monthReceipts.find(r => r.id === receiptId);
+      if (!receipt) return;
+
+      const currency = receipt.currency || 'сом';
+      const items = receipt.items || [];
+      const totalSum = Number(receipt.total_amount) || items.reduce((s, i) => s + (Number(i.total_price) || 0), 0);
+
+      document.getElementById('detailModalStore').textContent = receipt.store_name;
+      document.getElementById('detailModalMeta').textContent = `${formatFullDate(receipt.receipt_date)} • ${items.length} поз.`;
+
+      document.getElementById('detailModalItemsBody').innerHTML = items.map(item => {
+        const meta = CATEGORIES[item.category] || CATEGORIES['Другое'];
+        return `
+          <tr>
+            <td class="py-2.5 px-3.5 font-medium text-slate-900">${escapeHtml(item.name)}</td>
+            <td class="py-2.5 px-3.5">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${meta.bg} ${meta.text}">
+                ${meta.icon} ${item.category}
+              </span>
+            </td>
+            <td class="py-2.5 px-3.5 text-right text-slate-600">${formatQty(item.quantity)}</td>
+            <td class="py-2.5 px-3.5 text-right font-bold text-slate-900">${formatMoney(item.total_price, currency)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('detailModalTotal').textContent = formatMoney(totalSum, currency);
+
+      const imgWrap = document.getElementById('detailModalImgWrapper');
+      const imgEl = document.getElementById('detailModalImg');
+      const photoLoading = document.getElementById('detailModalPhotoLoading');
+      imgWrap.classList.add('hidden');
+      photoLoading.classList.add('hidden');
+
+      document.getElementById('detailModal').classList.remove('hidden');
+
+      if (receipt.demoBlobUrl) {
+        imgEl.src = receipt.demoBlobUrl;
+        imgWrap.classList.remove('hidden');
+      } else if (receipt.image_path && supabaseClient) {
+        photoLoading.classList.remove('hidden');
+        try {
+          const { data, error } = await supabaseClient.storage
+            .from('receipts')
+            .createSignedUrl(receipt.image_path, 3600);
+          if (!error && data?.signedUrl) {
+            imgEl.src = data.signedUrl;
+            imgWrap.classList.remove('hidden');
+          }
+        } catch (e) {
+        } finally {
+          photoLoading.classList.add('hidden');
+        }
+      }
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    function confirmDeleteReceipt(receiptId) {
+      const receipt = monthReceipts.find(r => r.id === receiptId);
+      if (!receipt) return;
+
+      document.getElementById('confirmModalTitle').textContent = `Удалить чек «${receipt.store_name}»?`;
+      document.getElementById('confirmModalMessage').textContent =
+        `Чек от ${formatFullDate(receipt.receipt_date)} и его фотография будут безвозвратно удалены из облака.`;
+
+      document.getElementById('confirmModalActionBtn').onclick = async () => {
+        closeConfirmModal();
+
+        if (isDemoMode) {
+          monthReceipts = monthReceipts.filter(r => r.id !== receiptId);
+          renderDashboardFromState();
+          showToast('Чек удален.', 'info');
+          return;
+        }
+
+        try {
+          if (receipt.image_path && supabaseClient) {
+            await supabaseClient.storage.from('receipts').remove([receipt.image_path]);
+          }
+          const { error } = await supabaseClient
+            .from('receipts')
+            .delete()
+            .eq('id', receiptId)
+            .eq('user_id', currentUser.id);
+
+          if (error) throw error;
+
+          await fetchAndRenderMonthData();
+          showToast('Чек и фото удалены из Supabase.', 'info');
+        } catch (err) {
+          showToast('Ошибка удаления: ' + err.message, 'error');
+        }
+      };
+
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.add('hidden');
+    }
+
+    /**
+     * ==================== ПЕРЕКЛЮЧЕНИЕ МЕСЯЦЕВ И ЭКСПОРТ CSV ====================
+     */
+    function getCurrentMonthString() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function getDefaultDateForSelectedMonth() {
+      const now = new Date();
+      if (selectedMonth === getCurrentMonthString()) {
+        return `${selectedMonth}-${String(now.getDate()).padStart(2, '0')}`;
+      }
+      return `${selectedMonth}-15`;
+    }
+
+    function renderMonthSelector() {
+      const select = document.getElementById('monthSelector');
+      const months = new Set();
+      const now = new Date();
+
+      for (let offset = -18; offset <= 6; offset++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+        months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      months.add(selectedMonth);
+
+      select.innerHTML = Array.from(months).sort().reverse().map(ym =>
+        `<option value="${ym}" ${ym === selectedMonth ? 'selected' : ''}>${formatMonthTitle(ym)}</option>`
+      ).join('');
+
+      const shortcut = document.getElementById('currentMonthShortcut');
+      if (selectedMonth !== getCurrentMonthString()) shortcut.classList.remove('hidden');
+      else shortcut.classList.add('hidden');
+    }
+
+    async function onMonthSelectChange(ym) {
+      selectedMonth = ym;
+      expandedCategories.clear();
+      expandedProducts.clear();
+      renderMonthSelector();
+      await fetchAndRenderMonthData();
+    }
+
+    async function changeMonth(delta) {
+      selectedMonth = getAdjacentMonthString(selectedMonth, delta);
+      expandedCategories.clear();
+      expandedProducts.clear();
+      renderMonthSelector();
+      await fetchAndRenderMonthData();
+    }
+
+    async function resetToCurrentMonth() {
+      selectedMonth = getCurrentMonthString();
+      renderMonthSelector();
+      await fetchAndRenderMonthData();
+    }
+
+    function populateCategoryFilter() {
+      const select = document.getElementById('itemCategoryFilter');
+      CATEGORY_NAMES.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = `${CATEGORIES[cat].icon} ${cat}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function exportMonthCSV() {
+      if (monthReceipts.length === 0) {
+        showToast('В выбранном месяце нет данных для экспорта.', 'info');
+        return;
+      }
+
+      const currency = getPrimaryCurrency(monthReceipts);
+      const analytics = computeMonthAnalytics(monthReceipts);
+      const sep = ';';
+      const lines = [];
+
+      lines.push(`ОТЧЕТ ПО РАСХОДАМ ЗА ${formatMonthTitle(selectedMonth).toUpperCase()}`);
+      lines.push('');
+      lines.push('1. ГРУППИРОВКА ПО КАТЕГОРИЯМ');
+      lines.push(['Категория', 'Количество товаров', 'Доля (%)', 'Сумма', 'Валюта'].join(sep));
+      analytics.categoriesList.forEach(c => {
+        lines.push([
+          escapeCsv(c.category),
+          String(c.totalQty).replace('.', ','),
+          c.sharePercent.toFixed(1).replace('.', ','),
+          String(c.totalSpend).replace('.', ','),
+          escapeCsv(currency)
+        ].join(sep));
+      });
+
+      lines.push('');
+      lines.push('2. СВОДКА ТОВАРОВ (СГРУППИРОВАНО)');
+      lines.push(['Товар', 'Категория', 'Общее количество', 'Средняя цена', 'Общая сумма', 'Валюта'].join(sep));
+      analytics.groupedProductsList
+        .sort((a, b) => b.totalSpend - a.totalSpend)
+        .forEach(p => {
+          lines.push([
+            escapeCsv(p.name),
+            escapeCsv(p.category),
+            String(p.totalQty).replace('.', ','),
+            p.avgUnitPrice.toFixed(2).replace('.', ','),
+            String(p.totalSpend).replace('.', ','),
+            escapeCsv(currency)
+          ].join(sep));
+        });
+
+      lines.push('');
+      lines.push('3. ВСЕ ПОЗИЦИИ ПО ЧЕКАМ');
+      lines.push(['Дата', 'Магазин', 'Товар', 'Категория', 'Кол-во', 'Цена ед.', 'Сумма', 'Валюта'].join(sep));
+      monthReceipts.forEach(r => {
+        (r.items || []).forEach(i => {
+          lines.push([
+            escapeCsv(r.receipt_date),
+            escapeCsv(r.store_name),
+            escapeCsv(i.name),
+            escapeCsv(i.category),
+            String(i.quantity).replace('.', ','),
+            String(i.unit_price).replace('.', ','),
+            String(i.total_price).replace('.', ','),
+            escapeCsv(r.currency || currency)
+          ].join(sep));
+        });
+      });
+
+      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chektraker_${selectedMonth}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Файл chektraker_${selectedMonth}.csv скачан!`, 'success');
+    }
+
+    /**
+     * ==================== УТИЛИТЫ ФОРМАТИРОВАНИЯ И БУФЕРА ОБМЕНА ====================
+     */
+    function formatMonthTitle(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      return `${MONTH_NAMES_RU[m - 1]} ${y}`;
+    }
+
+    function formatFullDate(dateStr) {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return dateStr;
+      return `${d} ${MONTH_NAMES_GENITIVE[m - 1]} ${y}`;
+    }
+
+    function formatShortDate(dateStr) {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return dateStr;
+      return `${d} ${MONTH_NAMES_GENITIVE[m - 1].slice(0, 3)}`;
+    }
+
+    function formatMoney(amount, currency = 'сом') {
+      const num = Number(amount) || 0;
+      const isInt = Math.abs(num - Math.round(num)) < 0.005;
+      return `${num.toLocaleString('ru-RU', {
+        minimumFractionDigits: isInt ? 0 : 2,
+        maximumFractionDigits: 2
+      })} ${currency}`;
+    }
+
+    function formatQty(qty) {
+      const num = Number(qty) || 0;
+      const isInt = Math.abs(num - Math.round(num)) < 0.0005;
+      return num.toLocaleString('ru-RU', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: isInt ? 0 : 3
+      });
+    }
+
+    function isValidDateStr(s) {
+      return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    }
+
+    function pluralizeReceipts(n) {
+      return n % 10 === 1 && n % 100 !== 11 ? 'чеке' : 'чеках';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeCsv(val) {
+      const s = String(val ?? '');
+      return (s.includes(';') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+
+    function copyTextToClipboard(text, successMsg) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg, 'success');
+      } catch (e) {
+        showToast('Не удалось скопировать текст автоматически.', 'error');
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const styles = {
+        success: 'bg-slate-900 text-white border-emerald-500/40',
+        error: 'bg-rose-950 text-white border-rose-500/40',
+        info: 'bg-slate-800 text-white border-slate-700'
+      };
+      const icons = {
+        success: '<span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">✓</span>',
+        error: '<span class="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">!</span>',
+        info: '<span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">i</span>'
+      };
+      toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-xl text-xs sm:text-sm font-medium animate-fade-in ${styles[type] || styles.info}`;
+      toast.innerHTML = `${icons[type] || icons.info}<span class="flex-1">${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 3800);
+    }
+  </script>
+</body>
+</html>
